@@ -11,4 +11,5 @@ type Storage interface {
     Reset(ctx context.Context, key string) error
     TTL(ctx context.Context, key string) (time.Duration, error)
     SetTTL(ctx context.Context, key string, ttl time.Duration) error
+    Get(ctx context.Context, key string) (int, error)
 }

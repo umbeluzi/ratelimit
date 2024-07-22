@@ -1,11 +1,11 @@
-# ratelimit
+# Rate Limit Library
 
 A Go library for rate limiting with various algorithms. The library supports the following rate limiting algorithms:
 
-- Fixed Window
-- Leaky Bucket
-- Sliding Window
-- Token Bucket
+- [Fixed Window](fixedwindow)
+- [Leaky Bucket](leakybucket)
+- [Sliding Window](slidingwindow)
+- [Token Bucket](tokenbucket)
 
 ## Installation
 
@@ -29,13 +29,14 @@ type Storage interface {
     Reset(ctx context.Context, key string) error
     TTL(ctx context.Context, key string) (time.Duration, error)
     SetTTL(ctx context.Context, key string, ttl time.Duration) error
+    Get(ctx context.Context, key string) (int, error)
 }
 ```
 
 ### Example: In-Memory Storage
 
 ```go
-package main
+package storage
 
 import (
     "context"
@@ -86,150 +87,12 @@ func (s *InMemoryStorage) SetTTL(ctx context.Context, key string, ttl time.Durat
     s.ttl[key] = time.Now().Add(ttl)
     return nil
 }
-```
 
-### Example: Redis Storage
+func (s *InMemoryStorage) Get(ctx context.Context, key string) (int, error) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
 
-```go
-package main
-
-import (
-    "context"
-    "github.com/go-redis/redis/v8"
-    "time"
-)
-
-type RedisStorage struct {
-    client *redis.Client
-}
-
-func NewRedisStorage(client *redis.Client) *RedisStorage {
-    return &RedisStorage{client: client}
-}
-
-func (s *RedisStorage) Increment(ctx context.Context, key string) (int, error) {
-    result, err := s.client.Incr(ctx, key).Result()
-    return int(result), err
-}
-
-func (s *RedisStorage) Reset(ctx context.Context, key string) error {
-    return s.client.Del(ctx, key).Err()
-}
-
-func (s *RedisStorage) TTL(ctx context.Context, key string) (time.Duration, error) {
-    result, err := s.client.TTL(ctx, key).Result()
-    return result, err
-}
-
-func (s *RedisStorage) SetTTL(ctx context.Context, key string, ttl time.Duration) error {
-    return s.client.Expire(ctx, key, ttl).Err()
-}
-```
-
-### Example: Memcached Storage
-
-```go
-package main
-
-import (
-    "context"
-    "github.com/bradfitz/gomemcache/memcache"
-    "time"
-    "strconv"
-)
-
-type MemcachedStorage struct {
-    client *memcache.Client
-}
-
-func NewMemcachedStorage(client *memcache.Client) *MemcachedStorage {
-    return &MemcachedStorage{client: client}
-}
-
-func (s *MemcachedStorage) Increment(ctx context.Context, key string) (int, error) {
-    err := s.client.Increment(key, 1)
-    if err == memcache.ErrCacheMiss {
-        err = s.client.Set(&memcache.Item{Key: key, Value: []byte("1")})
-        return 1, err
-    }
-    if err != nil {
-        return 0, err
-    }
-    item, err := s.client.Get(key)
-    if err != nil {
-        return 0, err
-    }
-    result, err := strconv.Atoi(string(item.Value))
-    return result, err
-}
-
-func (s *MemcachedStorage) Reset(ctx context.Context, key string) error {
-    return s.client.Delete(key)
-}
-
-func (s *MemcachedStorage) TTL(ctx context.Context, key string) (time.Duration, error) {
-    return time.Minute, nil // Memcached does not support TTL retrieval
-}
-
-func (s *MemcachedStorage) SetTTL(ctx context.Context, key string, ttl time.Duration) error {
-    return s.client.Touch(key, int32(ttl.Seconds()))
-}
-```
-
-### Example: Database Storage
-
-```go
-package main
-
-import (
-    "context"
-    "database/sql"
-    "time"
-)
-
-type DatabaseStorage struct {
-    db *sql.DB
-}
-
-func NewDatabaseStorage(db *sql.DB) *DatabaseStorage {
-    return &DatabaseStorage{db: db}
-}
-
-func (s *DatabaseStorage) Increment(ctx context.Context, key string) (int, error) {
-    var count int
-    err := s.db.QueryRowContext(ctx, "SELECT count FROM ratelimit WHERE key =  FOR UPDATE", key).Scan(&count)
-    if err == sql.ErrNoRows {
-        _, err = s.db.ExecContext(ctx, "INSERT INTO ratelimit (key, count, ttl) VALUES (, 1, )", key, time.Now().Add(time.Minute))
-        return 1, err
-    }
-    if err != nil {
-        return 0, err
-    }
-    count++
-    _, err = s.db.ExecContext(ctx, "UPDATE ratelimit SET count =  WHERE key = ", count, key)
-    return count, err
-}
-
-func (s *DatabaseStorage) Reset(ctx context.Context, key string) error {
-    _, err := s.db.ExecContext(ctx, "DELETE FROM ratelimit WHERE key = ", key)
-    return err
-}
-
-func (s *DatabaseStorage) TTL(ctx context.Context, key string) (time.Duration, error) {
-    var ttl time.Time
-    err := s.db.QueryRowContext(ctx, "SELECT ttl FROM ratelimit WHERE key = ", key).Scan(&ttl)
-    if err == sql.ErrNoRows {
-        return 0, nil
-    }
-    if err != nil {
-        return 0, err
-    }
-    return time.Until(ttl), nil
-}
-
-func (s *DatabaseStorage) SetTTL(ctx context.Context, key string, ttl time.Duration) error {
-    _, err := s.db.ExecContext(ctx, "UPDATE ratelimit SET ttl =  WHERE key = ", time.Now().Add(ttl), key)
-    return err
+    return s.data[key], nil
 }
 ```
 
@@ -335,3 +198,7 @@ A sliding window rate limiter.
 ### Token Bucket
 
 A token bucket rate limiter.
+
+## Example Usage
+
+See the `cmd/example` directory for usage examples.

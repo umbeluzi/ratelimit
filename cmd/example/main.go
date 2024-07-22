@@ -14,53 +14,9 @@ import (
     "github.com/umbeluzi/ratelimit/tokenbucket"
 )
 
-type InMemoryStorage struct {
-    data map[string]int
-    ttl  map[string]time.Time
-    mu   sync.Mutex
-}
-
-func NewInMemoryStorage() *InMemoryStorage {
-    return &InMemoryStorage{
-        data: make(map[string]int),
-        ttl:  make(map[string]time.Time),
-    }
-}
-
-func (s *InMemoryStorage) Increment(ctx context.Context, key string) (int, error) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-
-    s.data[key]++
-    return s.data[key], nil
-}
-
-func (s *InMemoryStorage) Reset(ctx context.Context, key string) error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-
-    s.data[key] = 0
-    return nil
-}
-
-func (s *InMemoryStorage) TTL(ctx context.Context, key string) (time.Duration, error) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-
-    return time.Until(s.ttl[key]), nil
-}
-
-func (s *InMemoryStorage) SetTTL(ctx context.Context, key string, ttl time.Duration) error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-
-    s.ttl[key] = time.Now().Add(ttl)
-    return nil
-}
-
 func main() {
     ctx := context.Background()
-    storage := NewInMemoryStorage()
+    storage := storage.NewInMemoryStorage()
 
     // Example configuration with burst limit
     config := config.NewStatic(5, time.Minute, 2, 0, time.Now())

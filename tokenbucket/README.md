@@ -7,15 +7,16 @@ The Token Bucket rate limiting algorithm allows bursts of requests up to a maxim
 ```go
 import (
     "context"
+    "fmt"
     "time"
     "github.com/umbeluzi/ratelimit/config"
-    "github.com/umbeluzi/ratelimit/tokenbucket"
     "github.com/umbeluzi/ratelimit/storage"
+    "github.com/umbeluzi/ratelimit/tokenbucket"
 )
 
 func main() {
     ctx := context.Background()
-    storage := NewInMemoryStorage()
+    storage := storage.NewInMemoryStorage()
     config := config.NewStatic(5, time.Minute, 2, 0, time.Now())
 
     tokenBucket := tokenbucket.New(storage, config)
@@ -28,6 +29,20 @@ func main() {
     } else {
         fmt.Println("Request denied")
     }
+
+    // Quota information
+    count, maxRequests, burstLimit, err := tokenBucket.Quota(ctx, "test_key")
+    if err != nil {
+        fmt.Println("Error:", err)
+    }
+    fmt.Printf("Quota - Count: %d, MaxRequests: %d, BurstLimit: %d\n", count, maxRequests, burstLimit)
+
+    // Retry-After header
+    retryAfter, err := tokenBucket.NextAllowed(ctx, "test_key")
+    if err != nil {
+        fmt.Println("Error:", err)
+    }
+    fmt.Printf("Retry-After: %s\n", retryAfter)
 }
 ```
 

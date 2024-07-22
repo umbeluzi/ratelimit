@@ -31,6 +31,10 @@ func (ms *MockStorage) SetTTL(ctx context.Context, key string, ttl time.Duration
     return nil
 }
 
+func (ms *MockStorage) Get(ctx context.Context, key string) (int, error) {
+    return ms.count, nil
+}
+
 func TestFixedWindow_Allow(t *testing.T) {
     storage := &MockStorage{}
     config := config.NewStatic(5, time.Minute, 2, 0, time.Now())

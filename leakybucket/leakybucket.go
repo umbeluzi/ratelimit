@@ -69,3 +69,32 @@ func (lb *LeakyBucket) Allow(ctx context.Context, key string) (bool, error) {
 
     return true, nil
 }
+
+// Quota returns the current quota information.
+func (lb *LeakyBucket) Quota(ctx context.Context, key string) (int, int, int, error) {
+    count, err := lb.storage.Get(ctx, key)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    maxRequests, err := lb.config.MaxRequests(ctx)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    burstLimit, err := lb.config.BurstLimit(ctx)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    return count, maxRequests, burstLimit, nil
+}
+
+// NextAllowed returns the time duration until the next allowed request.
+func (lb *LeakyBucket) NextAllowed(ctx context.Context, key string) (time.Duration, error) {
+    ttl, err := lb.storage.TTL(ctx, key)
+    if err != nil {
+        return 0, err
+    }
+    return ttl, nil
+}

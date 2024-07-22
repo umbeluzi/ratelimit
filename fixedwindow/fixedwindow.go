@@ -63,3 +63,32 @@ func (fw *FixedWindow) Allow(ctx context.Context, key string) (bool, error) {
 
     return true, nil
 }
+
+// Quota returns the current quota information.
+func (fw *FixedWindow) Quota(ctx context.Context, key string) (int, int, int, error) {
+    count, err := fw.storage.Get(ctx, key)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    maxRequests, err := fw.config.MaxRequests(ctx)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    burstLimit, err := fw.config.BurstLimit(ctx)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    return count, maxRequests, burstLimit, nil
+}
+
+// NextAllowed returns the time duration until the next allowed request.
+func (fw *FixedWindow) NextAllowed(ctx context.Context, key string) (time.Duration, error) {
+    ttl, err := fw.storage.TTL(ctx, key)
+    if err != nil {
+        return 0, err
+    }
+    return ttl, nil
+}

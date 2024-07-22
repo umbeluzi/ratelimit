@@ -81,3 +81,32 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (bool, error) {
 
     return true, nil
 }
+
+// Quota returns the current quota information.
+func (tb *TokenBucket) Quota(ctx context.Context, key string) (int, int, int, error) {
+    count, err := tb.storage.Get(ctx, key)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    maxRequests, err := tb.config.MaxRequests(ctx)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    burstLimit, err := tb.config.BurstLimit(ctx)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    return count, maxRequests, burstLimit, nil
+}
+
+// NextAllowed returns the time duration until the next allowed request.
+func (tb *TokenBucket) NextAllowed(ctx context.Context, key string) (time.Duration, error) {
+    ttl, err := tb.storage.TTL(ctx, key)
+    if err != nil {
+        return 0, err
+    }
+    return ttl, nil
+}

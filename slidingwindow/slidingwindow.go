@@ -44,7 +44,6 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (bool, error) {
         return false, err
     }
 
-    // Implement sliding window logic here
     count, err := sw.storage.Increment(ctx, key)
     if err != nil {
         return false, err
@@ -63,4 +62,33 @@ func (sw *SlidingWindow) Allow(ctx context.Context, key string) (bool, error) {
     }
 
     return true, nil
+}
+
+// Quota returns the current quota information.
+func (sw *SlidingWindow) Quota(ctx context.Context, key string) (int, int, int, error) {
+    count, err := sw.storage.Get(ctx, key)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    maxRequests, err := sw.config.MaxRequests(ctx)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    burstLimit, err := sw.config.BurstLimit(ctx)
+    if err != nil {
+        return 0, 0, 0, err
+    }
+
+    return count, maxRequests, burstLimit, nil
+}
+
+// NextAllowed returns the time duration until the next allowed request.
+func (sw *SlidingWindow) NextAllowed(ctx context.Context, key string) (time.Duration, error) {
+    ttl, err := sw.storage.TTL(ctx, key)
+    if err != nil {
+        return 0, err
+    }
+    return ttl, nil
 }
