@@ -40,6 +40,7 @@ func TestTokenBucket_Allow(t *testing.T) {
     config := config.NewStatic(5, time.Minute, 2, 0, time.Now())
 
     tb := New(storage, config)
+    defer tb.Stop() // Ensure the ticker is stopped for graceful shutdown
 
     for i := 0; i < 7; i++ {
         allowed, err := tb.Allow(context.Background(), "test")

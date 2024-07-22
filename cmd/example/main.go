@@ -41,6 +41,7 @@ func main() {
 
     // Example using Token Bucket algorithm with burst support
     tokenBucket := tokenbucket.New(storage, config)
+    defer tokenBucket.Stop() // Ensure the ticker is stopped for graceful shutdown
     fmt.Println("Testing Token Bucket:")
     for i := 0; i < 10; i++ {
         allowed, err := tokenBucket.Allow(ctx, "tokenbucket_key")

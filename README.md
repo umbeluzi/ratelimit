@@ -96,6 +96,108 @@ func (s *InMemoryStorage) Get(ctx context.Context, key string) (int, error) {
 }
 ```
 
+### Example: Redis Storage
+
+```go
+package storage
+
+import (
+    "context"
+    "github.com/redis/go-redis/v9"
+    "time"
+)
+
+type RedisStorage struct {
+    client *redis.Client
+}
+
+func NewRedisStorage(client *redis.Client) *RedisStorage {
+    return &RedisStorage{client: client}
+}
+
+func (s *RedisStorage) Increment(ctx context.Context, key string) (int, error) {
+    result, err := s.client.Incr(ctx, key).Result()
+    return int(result), err
+}
+
+func (s *RedisStorage) Reset(ctx context.Context, key string) error {
+    return s.client.Del(ctx, key).Err()
+}
+
+func (s *RedisStorage) TTL(ctx context.Context, key string) (time.Duration, error) {
+    result, err := s.client.TTL(ctx, key).Result()
+    return result, err
+}
+
+func (s *RedisStorage) SetTTL(ctx context.Context, key string, ttl time.Duration) error {
+    return s.client.Expire(ctx, key, ttl).Err()
+}
+
+func (s *RedisStorage) Get(ctx context.Context, key string) (int, error) {
+    result, err := s.client.Get(ctx, key).Int()
+    return result, err
+}
+```
+
+### Example: Memcached Storage
+
+```go
+package storage
+
+import (
+    "context"
+    "github.com/bradfitz/gomemcache/memcache"
+    "strconv"
+    "time"
+)
+
+type MemcachedStorage struct {
+    client *memcache.Client
+}
+
+func NewMemcachedStorage(client *memcache.Client) *MemcachedStorage {
+    return &MemcachedStorage{client: client}
+}
+
+func (s *MemcachedStorage) Increment(ctx context.Context, key string) (int, error) {
+    err := s.client.Increment(key, 1)
+    if err == memcache.ErrCacheMiss {
+        err = s.client.Set(&memcache.Item{Key: key, Value: []byte("1")})
+        return 1, err
+    }
+    if err != nil {
+        return 0, err
+    }
+    item, err := s.client.Get(key)
+    if err != nil {
+        return 0, err
+    }
+    result, err := strconv.Atoi(string(item.Value))
+    return result, err
+}
+
+func (s *MemcachedStorage) Reset(ctx context.Context, key string) error {
+    return s.client.Delete(key)
+}
+
+func (s *MemcachedStorage) TTL(ctx context.Context, key string) (time.Duration, error) {
+    return time.Minute, nil // Memcached does not support TTL retrieval
+}
+
+func (s *MemcachedStorage) SetTTL(ctx context.Context, key string, ttl time.Duration) error {
+    return s.client.Touch(key, int32(ttl.Seconds()))
+}
+
+func (s *MemcachedStorage) Get(ctx context.Context, key string) (int, error) {
+    item, err := s.client.Get(key)
+    if err != nil {
+        return 0, err
+    }
+    result, err := strconv.Atoi(string(item.Value))
+    return result, err
+}
+```
+
 ## Implementing Config
 
 The `Config` interface allows you to implement your own configuration for rate limiting. The interface requires the following methods:

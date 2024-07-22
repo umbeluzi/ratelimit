@@ -11,43 +11,65 @@ import (
 
 // TokenBucket is an implementation of the token bucket rate limiting algorithm.
 type TokenBucket struct {
-    storage storage.Storage
-    config  config.Config
-    mu      sync.Mutex
+    storage     storage.Storage
+    config      config.Config
+    mu          sync.Mutex
+    ticker      *time.Ticker
+    stopChannel chan struct{}
 }
 
 // New creates a new TokenBucket rate limiter.
 func New(storage storage.Storage, config config.Config) *TokenBucket {
     tb := &TokenBucket{
-        storage: storage,
-        config:  config,
+        storage:     storage,
+        config:      config,
+        stopChannel: make(chan struct{}),
     }
-    go tb.refillTokens()
+    tb.startRefill()
     return tb
+}
+
+// startRefill starts the refill ticker.
+func (tb *TokenBucket) startRefill() {
+    interval, _ := tb.config.Interval(context.Background())
+    tb.ticker = time.NewTicker(interval)
+    go func() {
+        for {
+            select {
+            case <-tb.ticker.C:
+                tb.mu.Lock()
+                tb.refillTokens()
+                tb.mu.Unlock()
+            case <-tb.stopChannel:
+                tb.ticker.Stop()
+                return
+            }
+        }
+    }()
 }
 
 // refillTokens refills the bucket with tokens at the defined refill rate.
 func (tb *TokenBucket) refillTokens() {
-    for {
-        time.Sleep(time.Second)
-        tb.mu.Lock()
-        interval, err := tb.config.Interval(context.Background())
-        if err == nil {
-            now := time.Now()
-            lastRefill, _ := tb.config.LastRefill(context.Background())
-            elapsed := now.Sub(lastRefill)
-            tokensToAdd := int(elapsed / interval)
-            tokens, _ := tb.config.Tokens(context.Background())
-            tokens += tokensToAdd
-            maxTokens, _ := tb.config.MaxRequests(context.Background())
-            if tokens > maxTokens {
-                tokens = maxTokens
-            }
-            tb.config.SetTokens(context.Background(), tokens)
-            tb.config.SetLastRefill(context.Background(), now)
+    interval, err := tb.config.Interval(context.Background())
+    if err == nil {
+        now := time.Now()
+        lastRefill, _ := tb.config.LastRefill(context.Background())
+        elapsed := now.Sub(lastRefill)
+        tokensToAdd := int(elapsed / interval)
+        tokens, _ := tb.config.Tokens(context.Background())
+        tokens += tokensToAdd
+        maxTokens, _ := tb.config.MaxRequests(context.Background())
+        if tokens > maxTokens {
+            tokens = maxTokens
         }
-        tb.mu.Unlock()
+        tb.config.SetTokens(context.Background(), tokens)
+        tb.config.SetLastRefill(context.Background(), now)
     }
+}
+
+// Stop stops the refill ticker for graceful shutdown.
+func (tb *TokenBucket) Stop() {
+    close(tb.stopChannel)
 }
 
 // Allow checks if a request is allowed for a given key using the token bucket algorithm.

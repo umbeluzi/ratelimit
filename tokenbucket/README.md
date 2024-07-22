@@ -20,6 +20,8 @@ func main() {
     config := config.NewStatic(5, time.Minute, 2, 0, time.Now())
 
     tokenBucket := tokenbucket.New(storage, config)
+    defer tokenBucket.Stop() // Ensure the ticker is stopped for graceful shutdown
+
     allowed, err := tokenBucket.Allow(ctx, "test_key")
     if err != nil {
         fmt.Println("Error:", err)
